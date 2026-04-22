@@ -8,6 +8,8 @@ The work was implemented on top of an academic AR renderer base that already sup
 
 ## Overview
 
+![Overview](Docs/Overview.png)
+
 This project was a seminar-driven implementation of the paper:
 
 **Imperfect Shadow Maps for Efficient Computation of Indirect Illumination**  
@@ -137,10 +139,6 @@ The implemented pipeline is:
 ---
 
 ## Documentation Images
-
-### Overview
-
-![Overview](Docs/Overview.png)
 
 ### Reflective Shadow Map (RSM)
 
