@@ -114,7 +114,7 @@ A focused excerpt of the pipeline integration code showing the core stages I imp
 
 Images captured from the seminar presentation and implementation results.
 
-### Seminar Material
+#### Seminar Material
 
 This project was also presented in a lab seminar as a paper analysis + implementation study.
 
@@ -215,12 +215,19 @@ In short, this project helped me develop the ability to move from:
 
 ---
 
+## Seminar / Knowledge Sharing
+
+This implementation was also organized into a lab seminar presentation covering the paper background, pipeline design, implementation details, trade-offs, and measured demo results.
+
+---
+
 ## Related Materials
 
 - Portfolio PDF: [add link]
 - Seminar / demo video: [add link]
 - UE5 Custom SSGI repository: [add link]
 - Path Tracer repository: [add link]
+- Seminar slides (PDF): [Docs/ISM_Seminar_Slides.pdf](Docs/ISM_Seminar_Slides.pdf)
 
 ---
 
