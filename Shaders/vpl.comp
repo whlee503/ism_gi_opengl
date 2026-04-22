@@ -1,0 +1,145 @@
+#version 430 core
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in; // 쓰레드 256개
+
+// 1. RSM 텍스처 (읽기 전용)
+uniform sampler2D rsmPosTex;
+uniform sampler2D rsmNormTex;
+uniform sampler2D rsmFluxTex;
+
+// 2. VPL 데이터 구조체 (std430 레이아웃 사용 - 정렬 문제 해결)
+struct VPL {
+    vec4 pos;   // xyz: pos, w: padding
+    vec4 norm;  // xyz: norm, w: padding
+    vec4 color; // xyz: color, w: padding
+};
+
+// 3. VPL 데이터를 저장할 버퍼 (쓰기 전용)
+layout(std430, binding = 0) buffer VPLBuffer {
+    VPL vpls[];
+};
+
+uniform float uTime;        // 랜덤 시드용 시간
+uniform vec3 uLightPos;     // 주광원 위치
+uniform float uLightFactor; // 빛 강도 계수
+uniform int uGridCols;      // 아틀라스 그리드 크기 (16)
+
+// ================= [설정] Importance Sampling 파라미터 ================
+const int MAX_ITERATIONS = 256;                  // 한 VPL을 뽑기 위해 시도할 최대 횟수
+const float MAX_LUMINANCE_ESTIMATE = 1.0;       // 씬에서 예상되는 최대 밝기 (적절히 조절 필요)
+
+// GLSL 랜덤 함수 (0.0 ~ 1.0)
+float rand(vec2 co){
+    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
+
+// 휘도(밝기) 계산 함수
+float getLuminance(vec3 color) {
+    return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    
+    // 텍스처 크기
+    ivec2 texSize = textureSize(rsmPosTex, 0);
+
+    vec3 bestP = vec3(0);
+    vec3 bestN = vec3(0);
+    vec3 bestFlux = vec3(0);
+    bool found = false;
+
+    
+    // --------------- [Importance Sampling: Rejection Method] ----------------
+    // 밝은 픽셀을 찾을 때까지 루프를 돌며 랜덤 위치를 찌릅니다.
+
+    for (int i = 0; i < MAX_ITERATIONS; ++i) {
+        // 1. 랜덤 UV 생성
+        // i를 시드에 섞어서 매 루프마다 다른 위치를 샘플링하도록 함
+        float seed = float(idx) + uTime + float(i) * 0.13;
+        float r1 = rand(vec2(seed, seed * 1.5));
+        float r2 = rand(vec2(seed * 2.3, seed));
+        vec2 uv = vec2(r1, r2);
+        
+        // 2. Flux 가져오기
+        vec3 flux = texture(rsmFluxTex, uv).rgb;
+        float lum = getLuminance(flux);
+        
+        // 3. 확률적 수용 (Rejection)
+        // 밝기(lum)가 높을수록 선택될 확률이 높음.
+        // threshold는 0 ~ MAX_LUMINANCE_ESTIMATE 사이의 랜덤 값
+        float threshold = rand(uv + vec2(0.1)) * MAX_LUMINANCE_ESTIMATE;
+        
+        // [조건 1] 밝기가 임계값보다 커야 함 (밝을수록 확률 높음)
+        // [조건 2] 아주 어두운 노이즈(0.001 미만)는 무시
+        if (lum > threshold && lum > 0.001) {
+            
+            // 데이터 읽기
+            bestP = texture(rsmPosTex, uv).rgb;
+            bestN = texture(rsmNormTex, uv).rgb;
+            
+            // 유효성 검사 (빈 공간이면 안 됨)
+            if (length(bestP) > 0.01 && length(bestN) > 0.1) {
+                
+                // [중요: 에너지 보정]
+                // 밝은 픽셀이 더 자주 선택되므로, 에너지가 과도하게 증폭되는 것을 막아야 합니다.
+                // Monte Carlo 원리: Estimator = Value / PDF
+                // PDF(확률밀도)는 밝기(lum)에 비례함.
+                // 따라서 Flux / Lum 을 하면 색상(Chromaticity)은 유지되지만 밝기는 평준화됨.
+                // 이렇게 하면 모든 VPL이 비슷한 강도를 가지게 되어 노이즈가 획기적으로 줍니다.
+                
+                bestFlux = flux / max(lum, 0.001); 
+                //bestFlux = flux;
+                
+                // 전체 에너지 스케일 복원 (평균 밝기 보정)
+                // 이 상수는 씬에 따라 밝기를 조절하는 용도로 튜닝하세요.
+                bestFlux *= ( uLightFactor / 10 ); 
+                
+                found = true;
+                break; // 찾았으니 루프 종료
+            }
+        }
+    }
+    
+    // ------------------------------------------------------------------
+    // [Fallback] 루프를 다 돌았는데도 못 찾았으면? (씬이 너무 어두울 때)
+    // 그냥 마지막 시도했던 위치나, 랜덤 위치 하나를 강제로 사용
+    // ------------------------------------------------------------------
+    if (!found) {
+        float r1 = rand(vec2(float(idx), uTime));
+        float r2 = rand(vec2(uTime, float(idx)));
+        vec2 uv = vec2(r1, r2);
+        
+        bestP = texture(rsmPosTex, uv).rgb;
+        bestN = texture(rsmNormTex, uv).rgb;
+        bestFlux = texture(rsmFluxTex, uv).rgb;
+    }
+
+    
+    // 유효성 검사 (빈 공간이거나 뒷면인 경우)
+    // CPU 로직: if (length(P) < 0.01f || length(N) < 0.1f) continue;
+    // GPU에서는 continue가 안 되므로, 색상을 검은색(0)으로 죽여서 무효화합니다.
+    bool valid = true;
+    if (length(bestP) < 0.01 || length(bestN) < 0.1) valid = false;
+    
+    // 물리 기반 Flux 계산 (CPU 로직 이식)
+    vec3 L = uLightPos - bestP;
+    float dist2 = dot(L, L);
+    float dist = sqrt(dist2);
+    L /= dist;
+    
+    float lambert = max(0.0, dot(bestN, L));
+    if (lambert <= 0.0) valid = false;
+    
+    vec3 finalColor = vec3(0.0);
+    if (valid) {
+        // Importance Sampling을 했으므로 bestFlux는 이미 PDF로 나누어진 상태
+        // 거리 감쇠만 적용
+        finalColor = bestFlux * uLightFactor * lambert / max(1.0, dist2);
+    }
+    
+    // SSBO에 쓰기 (vec4로 맞춰서 저장)
+    vpls[idx].pos   = vec4(bestP, 1.0);
+    vpls[idx].norm  = vec4(bestN, 0.0);
+    vpls[idx].color = vec4(finalColor, 1.0);
+}

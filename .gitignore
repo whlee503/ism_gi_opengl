@@ -1,0 +1,28 @@
+# Visual Studio
+.vs/
+*.VC.db
+*.VC.opendb
+
+# Build outputs
+x64/
+Release/
+Debug/
+bin/
+obj/
+
+# Project / solution files
+*.sln
+*.vcxproj
+*.vcxproj.user
+*.vcxproj.filters
+
+# Executables / packaged files
+*.exe
+*.zip
+*.7z
+
+# Temp / OS files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
