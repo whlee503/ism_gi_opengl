@@ -221,10 +221,7 @@ This implementation was also organized into a lab seminar presentation covering 
 
 ## Related Materials
 
-- Portfolio PDF: [add link]
-- Seminar / demo video: [add link]
-- UE5 Custom SSGI repository: [add link]
-- Path Tracer repository: [add link]
+- Reference Paper: [Imperfect shadow maps for efficient computation of indirect illumination, T. Ritschel(SIGGRAPH ASIA '08)](https://dl.acm.org/doi/10.1145/1409060.1409082)
 - Seminar slides (PDF): [Docs/ISM_Seminar_Slides.pdf](Docs/ISM_Seminar_Slides.pdf)
 
 ---
