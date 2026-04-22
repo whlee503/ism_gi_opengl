@@ -114,6 +114,12 @@ A focused excerpt of the pipeline integration code showing the core stages I imp
 
 Images captured from the seminar presentation and implementation results.
 
+### Seminar Material
+
+This project was also presented in a lab seminar as a paper analysis + implementation study.
+
+- [Seminar slides (PDF)](Docs/ISM_Seminar_Slides.pdf)
+
 ---
 
 ## Pipeline Summary
